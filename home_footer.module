@@ -1,0 +1,151 @@
+<?php
+
+/*
+ * Query to get all micros
+ */
+function query_all_footer_blocks() {
+  $query = db_select('node', 'n');
+  $query->join('field_data_field_home_footer_type', 't', 'n.nid = t.entity_id');
+  $result = $query
+  ->fields('n', array('nid', 'title'))
+  ->fields('t', array('field_home_footer_type_value'))
+  ->condition('n.type', 'bloques_footer')
+  ->addTag('node_access')
+  ->execute();
+  return $result;
+}
+
+/**
+* Implements hook_block_info().
+*/
+function home_footer_block_info() {
+  $blocks = array();
+
+  $blocks['home_footer_block'] = array(
+    'info' => t('Bloques para el mfooter'),
+  );
+
+  return $blocks;
+}
+
+/**
+* Implements hook_block_view().
+*/
+function home_footer_block_view($delta = '') {
+  $block = array(
+    'subject' => '',
+    'content' => '',
+  );
+
+  if ($delta == 'home_footer_block') {
+    $block['subject'] = t('Home Footer Block');
+    $items = array();
+
+    if (user_access('access content')) {
+      
+      $items = array();
+      $nids = query_all_footer_blocks();
+
+      foreach($nids as $nid) {
+
+        $block_items = array();
+        $footer_items = null;
+
+        switch($nid->field_home_footer_type_value) {
+          case 'link':
+            $footer_items = node_load($nid->nid);
+            break;
+          case 'txt':
+            $footer_items = node_load($nid->nid);
+            break;
+        }
+
+          $items[] = array(
+            'data' => array(
+              '#title' => $footer_items->title,
+              '#type' => $nid->field_home_footer_type_value,
+              '#items' => $footer_items,
+              '#theme' => 'home_footer_block',
+            ),
+          );
+        }
+
+        
+        if (!empty($items)) {
+          $block['content'] = $items;
+        }
+
+    }
+  }
+  return $block;
+}
+
+/**
+* Implements hook_theme().
+*/
+function home_footer_theme($existing, $type, $theme, $path) {
+  return array(
+    'home_footer_block' => array(
+      'variables' => array(
+        'title' => NULL,
+        'type' => NULL,
+        'items' => NULL,
+      ),
+      'template' => 'home-footer-block',
+    ),
+  );
+}
+
+/**
+* Preprocesses home block.
+*/
+function template_preprocess_home_footer_block(&$variables) {
+  $items = $variables['items'];
+  $title = $variables['title'];
+  $type = $variables['type'];
+  
+  // get the current language
+  global $language;
+  $langcode = $language->language;
+
+  // check type and add vars
+  if($type == 'link') {
+    $all_items = $items->field_home_footer_link;
+    $field = 'field_home_footer_link';
+  }
+  else {
+    $all_items = $items->field_home_footer_txt;
+    $field = 'field_home_footer_txt';
+  }
+
+  // init vars
+  $block_items = array();
+  $data_items = array();
+  $counter = 0;
+
+  foreach($all_items as $item) {
+    $block = field_get_items('node', $items, $field);
+    $block_items[] = $block;
+  }
+
+  $block_items = reset($block_items); // reset to avoid the first index
+
+  // loop through nested array
+  foreach($block_items as $block_item) {
+    if($type == 'link') {
+      $data_items[$counter]['txt'] = $block_item['field_home_footer_link_txt']['und'][0]['value'];
+      $data_items[$counter]['url'] = $block_item['field_home_footer_link_url']['und'][0]['value'];
+      $counter++;
+    }
+    else {
+      $data_items[] = $block_item['value'];
+    }
+    
+  }
+
+  // templates vars
+  $variables['title'] = $title;
+  $variables['type'] = $type;
+  $variables['langcode'] = $langcode;
+  $variables['items'] = $data_items; 
+}
